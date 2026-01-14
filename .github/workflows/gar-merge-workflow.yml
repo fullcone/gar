@@ -125,13 +125,13 @@ jobs:
           
           # Download all assets using asset API URL
           echo "$RELEASE_INFO" | jq -r '.assets[] | "\(.name) \(.url)"' | while read name url; do
-            if [[ "$name" == *"-source.zip" ]]; then
+            if [[ "$name" == *"-source.7z" ]]; then
               echo "Downloading source: $name..."
               curl -sL -f \
                 -H "Authorization: token $GAR_REPO_TOKEN" \
                 -H "Accept: application/octet-stream" \
                 "$url" -o "source-downloads/$name"
-            elif [[ "$name" == *".zip" ]]; then
+            elif [[ "$name" == *".7z" ]]; then
               echo "Downloading component: $name..."
               curl -sL -f \
                 -H "Authorization: token $GAR_REPO_TOKEN" \
@@ -154,12 +154,12 @@ jobs:
           
           mkdir -p decrypted
           
-          # Decrypt all component zips first
-          for zip in downloads/*.zip; do
-            if [ -f "$zip" ]; then
-              name=$(basename "$zip")
+          # Decrypt all component 7z files first
+          for archive in downloads/*.7z; do
+            if [ -f "$archive" ]; then
+              name=$(basename "$archive")
               echo "Decrypting $name..."
-              7z x -p"${ZIP_PASSWORD}" -o"decrypted/${name%.zip}" "$zip" -y
+              7z x -p"${ZIP_PASSWORD}" -o"decrypted/${name%.7z}" "$archive" -y
             fi
           done
           
@@ -247,12 +247,12 @@ jobs:
           mkdir -p all-sources
           
           # Decrypt and extract source archives
-          for zip in source-downloads/*-source.zip; do
-            if [ -f "$zip" ]; then
-              name=$(basename "$zip" -source.zip)
+          for archive in source-downloads/*-source.7z; do
+            if [ -f "$archive" ]; then
+              name=$(basename "$archive" -source.7z)
               echo "Decrypting source: $name..."
               mkdir -p "all-sources/$name"
-              7z x -p"${ZIP_PASSWORD}" -o"all-sources/$name" "$zip" -y
+              7z x -p"${ZIP_PASSWORD}" -o"all-sources/$name" "$archive" -y
             fi
           done
           
@@ -301,17 +301,17 @@ jobs:
           
           # Encrypt merged server files
           cd merged
-          7z a -tzip -p"${ZIP_PASSWORD}" -mhe=on ../csserver-all-in-one.zip .
+          7z a -t7z -p"${ZIP_PASSWORD}" -mhe=on ../csserver-all-in-one.7z *
           cd ..
           
           # Encrypt source archives
           cd all-sources
-          7z a -tzip -p"${ZIP_PASSWORD}" -mhe=on ../csserver-all-sources.zip .
+          7z a -t7z -p"${ZIP_PASSWORD}" -mhe=on ../csserver-all-sources.7z *
           cd ..
           
-          echo "Encrypted zip files created:"
-          ls -la *.zip
-
+          echo "Encrypted 7z files created:"
+          ls -la *.7z
+          
       - name: Get Release upload URL
         id: get_upload_url
         env:
@@ -333,20 +333,20 @@ jobs:
         run: |
           UPLOAD_URL="${{ steps.get_upload_url.outputs.upload_url }}"
           
-          echo "Uploading csserver-all-in-one.zip..."
+          echo "Uploading csserver-all-in-one.7z..."
           curl -s -f -X POST \
             -H "Authorization: token $GAR_REPO_TOKEN" \
-            -H "Content-Type: application/zip" \
-            "${UPLOAD_URL}?name=csserver-all-in-one.zip" \
-            --data-binary @csserver-all-in-one.zip
+            -H "Content-Type: application/x-7z-compressed" \
+            "${UPLOAD_URL}?name=csserver-all-in-one.7z" \
+            --data-binary @csserver-all-in-one.7z
           
-          echo "Uploading csserver-all-sources.zip..."
+          echo "Uploading csserver-all-sources.7z..."
           curl -s -f -X POST \
             -H "Authorization: token $GAR_REPO_TOKEN" \
-            -H "Content-Type: application/zip" \
-            "${UPLOAD_URL}?name=csserver-all-sources.zip" \
-            --data-binary @csserver-all-sources.zip
-
+            -H "Content-Type: application/x-7z-compressed" \
+            "${UPLOAD_URL}?name=csserver-all-sources.7z" \
+            --data-binary @csserver-all-sources.7z
+          
       - name: Publish Release (remove draft)
         env:
           GAR_REPO_TOKEN: ${{ secrets.GAR_REPO_TOKEN }}
@@ -370,8 +370,8 @@ jobs:
           | AmxxEasyHttp | latest |
           
           ## Downloads
-          - **csserver-all-in-one.zip** - Merged complete server files (encrypted)
-          - **csserver-all-sources.zip** - All source archives (encrypted)
+          - **csserver-all-in-one.7z** - Merged complete server files (encrypted)
+          - **csserver-all-sources.7z** - All source archives (encrypted)
           - Other zip files are individual component builds (unencrypted)
           
           > Note: Encrypted files require password to extract
