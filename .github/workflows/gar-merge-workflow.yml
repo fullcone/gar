@@ -389,3 +389,24 @@ jobs:
           echo ""
           echo "=== Release published successfully ==="
           echo "https://github.com/fullcone/gar/releases/tag/${{ github.event.client_payload.release_tag }}"
+
+      - name: Upload to ModelScope
+        env:
+          MODELSCOPE_TOKEN: ${{ secrets.MODELSCOPE_TOKEN }}
+        run: |
+          # Check if ModelScope token is set
+          if [ -z "$MODELSCOPE_TOKEN" ]; then
+            echo "Warning: MODELSCOPE_TOKEN not set, skipping ModelScope upload"
+            exit 0
+          fi
+          
+          # Install modelscope CLI
+          pip install modelscope -q
+          
+          # Upload csserver-all-in-one.7z to ModelScope
+          echo "Uploading to ModelScope..."
+          modelscope upload q9113979/yuyinceshi csserver-all-in-one.7z --token "$MODELSCOPE_TOKEN" || {
+            echo "Warning: ModelScope upload failed, but continuing..."
+          }
+          
+          echo "ModelScope upload completed"
