@@ -1,5 +1,5 @@
-# 这个文件需要放�?fullcone/gar 仓库�?.github/workflows/merge.yml
-# 用于接收私有仓库的触发，下载组件，合并，加密，更�?Release
+# This file should be placed in fullcone/gar repo at .github/workflows/merge.yml
+# Receives trigger from private repo, downloads components, merges, encrypts, updates Release
 
 name: Merge Build
 
@@ -35,7 +35,7 @@ jobs:
         run: |
           RELEASE_TAG="${{ github.event.client_payload.release_tag }}"
           
-          # 获取 Release 的所�?assets
+          # Get all Release assets
           ASSETS=$(curl -s \
             -H "Authorization: token $GAR_REPO_TOKEN" \
             -H "Accept: application/vnd.github.v3+json" \
@@ -44,7 +44,7 @@ jobs:
           
           mkdir -p downloads
           
-          # 下载所有组�?zip（不包括 source�?
+          # Download all component zips (excluding source)
           echo "$ASSETS" | while read name url; do
             if [[ "$name" == *".zip" ]] && [[ "$name" != *"-source.zip" ]]; then
               echo "Downloading $name..."
@@ -52,7 +52,7 @@ jobs:
             fi
           done
           
-          # 下载所�?source zip
+          # Download all source zips
           mkdir -p source-downloads
           echo "$ASSETS" | while read name url; do
             if [[ "$name" == *"-source.zip" ]]; then
@@ -69,12 +69,12 @@ jobs:
         run: |
           mkdir -p merged/cstrike
           
-          # 解压 ReHLDS（顶层文件）
+          # Extract ReHLDS (top-level files)
           if [ -f downloads/rehlds.zip ]; then
             unzip -o downloads/rehlds.zip -d merged/
           fi
           
-          # 解压其他组件�?cstrike
+          # Extract other components to cstrike
           for zip in regamedll metamod reapi reunion revoice amxxeasyhttp; do
             if [ -f "downloads/${zip}.zip" ]; then
               unzip -o "downloads/${zip}.zip" -d temp_extract/
@@ -85,25 +85,25 @@ jobs:
             fi
           done
           
-          # AMX Mod X 特殊处理
+          # AMX Mod X special handling
           if [ -f downloads/amxmodx.zip ]; then
             unzip -o downloads/amxmodx.zip -d amxmodx_temp/
             cd amxmodx_temp
-            # 保存其他游戏目录�?source（不放入 all-in-one�?
+            # Save other game directories to source (not in all-in-one)
             mkdir -p ../amxmodx_other_games
             for game in dod esf ns tfc ts; do
               [ -d "$game" ] && mv "$game" ../amxmodx_other_games/
             done
-            # 保留许可证文件（不删除）
-            # 合并 base �?cstrike
+            # Keep license files (do not delete)
+            # Merge base and cstrike
             if [ -d "base/addons" ] && [ -d "cstrike/addons" ]; then
               rsync -a base/addons/ cstrike/addons/ --ignore-existing
             fi
-            # 复制�?merged（包�?base 的许可证文件�?
+            # Copy to merged (including base license files)
             if [ -d cstrike ]; then
               rsync -a cstrike/ ../merged/cstrike/
             fi
-            # 复制 base 目录的许可证文件�?merged 根目�?
+            # Copy base directory license files to merged root
             if [ -d base ]; then
               find base -maxdepth 1 -name "*.txt" -exec cp {} ../merged/ \;
             fi
@@ -111,7 +111,7 @@ jobs:
             rm -rf amxmodx_temp
           fi
           
-          # 生成 plugins.ini
+          # Generate plugins.ini
           {
             echo "; Metamod plugins.ini"
             echo "linux addons/amxmodx/dlls/amxmodx_mm_i386.so"
@@ -119,7 +119,7 @@ jobs:
             echo "linux addons/revoice/revoice_mm_i386.so"
           } > merged/cstrike/addons/metamod/plugins.ini
           
-          # 生成 liblist.gam
+          # Generate liblist.gam
           {
             echo 'game "Counter-Strike"'
             echo 'url_info "www.counter-strike.net"'
@@ -141,7 +141,7 @@ jobs:
             echo 'edicts "1800"'
           } > merged/cstrike/liblist.gam
           
-          # 生成随机 SteamIdHashSalt
+          # Generate random SteamIdHashSalt
           RANDOM_SALT=$(openssl rand -hex 32)
           if [ -f merged/cstrike/reunion.cfg ]; then
             sed -i "s/^SteamIdHashSalt =.*/SteamIdHashSalt = ${RANDOM_SALT}/" merged/cstrike/reunion.cfg
@@ -162,32 +162,32 @@ jobs:
             fi
           done
           
-          # �?AMX Mod X 其他游戏目录也放�?source
+          # Add AMX Mod X other game directories to source
           if [ -d amxmodx_other_games ]; then
             mkdir -p all-sources/amxmodx-other-games
             mv amxmodx_other_games/* all-sources/amxmodx-other-games/
             rmdir amxmodx_other_games
           fi
           
-          # 生成 BUILD_INFO.txt
-          cat > all-sources/BUILD_INFO.txt << EOF
-=== CS Server Build Source Archive ===
-Build Date: $(date -u +%Y-%m-%dT%H:%M:%SZ)
-Run Number: ${{ github.event.client_payload.run_number }}
-
-=== Component Versions ===
-ReHLDS: ${{ github.event.client_payload.rehlds_version }}
-ReGameDLL: ${{ github.event.client_payload.regamedll_version }}
-Metamod-R: ${{ github.event.client_payload.metamod_version }}
-ReAPI: ${{ github.event.client_payload.reapi_version }}
-ReUnion: ${{ github.event.client_payload.reunion_version }}
-ReVoice: ${{ github.event.client_payload.revoice_version }}
-AMX Mod X: latest
-AmxxEasyHttp: latest
-
-=== Additional Content ===
-amxmodx-other-games/: AMX Mod X support for other games (dod, esf, ns, tfc, ts)
-EOF
+          # Generate BUILD_INFO.txt
+          {
+            echo "=== CS Server Build Source Archive ==="
+            echo "Build Date: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "Run Number: ${{ github.event.client_payload.run_number }}"
+            echo ""
+            echo "=== Component Versions ==="
+            echo "ReHLDS: ${{ github.event.client_payload.rehlds_version }}"
+            echo "ReGameDLL: ${{ github.event.client_payload.regamedll_version }}"
+            echo "Metamod-R: ${{ github.event.client_payload.metamod_version }}"
+            echo "ReAPI: ${{ github.event.client_payload.reapi_version }}"
+            echo "ReUnion: ${{ github.event.client_payload.reunion_version }}"
+            echo "ReVoice: ${{ github.event.client_payload.revoice_version }}"
+            echo "AMX Mod X: latest"
+            echo "AmxxEasyHttp: latest"
+            echo ""
+            echo "=== Additional Content ==="
+            echo "amxmodx-other-games/: AMX Mod X support for other games (dod, esf, ns, tfc, ts)"
+          } > all-sources/BUILD_INFO.txt
           
           echo "Source archives:"
           ls -la all-sources/
@@ -196,15 +196,15 @@ EOF
         env:
           ZIP_PASSWORD: ${{ secrets.ZIP_PASSWORD }}
         run: |
-          # 删除根目录的 appversion.h（各组件的不删）
+          # Delete root appversion.h (keep component ones)
           rm -f merged/appversion.h
           
-          # 加密合并后的服务器文�?
+          # Encrypt merged server files
           cd merged
           7z a -tzip -p"$ZIP_PASSWORD" -mhe=on ../csserver-all-in-one.zip .
           cd ..
           
-          # 加密源码归档
+          # Encrypt source archives
           cd all-sources
           7z a -tzip -p"$ZIP_PASSWORD" -mhe=on ../csserver-all-sources.zip .
           cd ..
@@ -270,13 +270,13 @@ EOF
           | AmxxEasyHttp | latest |
           
           ## Downloads
-          - **csserver-all-in-one.zip** - 合并后的完整服务器文件（加密�?
-          - **csserver-all-sources.zip** - 所有源码归档（加密�?
-          - 其他 zip 文件为各组件单独的编译产物（未加密）
+          - **csserver-all-in-one.zip** - Merged complete server files (encrypted)
+          - **csserver-all-sources.zip** - All source archives (encrypted)
+          - Other zip files are individual component builds (unencrypted)
           
-          > Note: 加密文件需要密码解�?
+          > Note: Encrypted files require password to extract
           
-          # 更新 Release 信息并发布（draft: false�?
+          # Update Release info and publish (draft: false)
           curl -s -X PATCH \
             -H "Authorization: token $GAR_REPO_TOKEN" \
             -H "Accept: application/vnd.github.v3+json" \
