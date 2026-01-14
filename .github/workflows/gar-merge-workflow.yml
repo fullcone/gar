@@ -112,34 +112,34 @@ jobs:
           fi
           
           # 生成 plugins.ini
-          cat > merged/cstrike/addons/metamod/plugins.ini << 'EOF'
-; Metamod plugins.ini
-linux addons/amxmodx/dlls/amxmodx_mm_i386.so
-linux addons/reunion/reunion_mm_i386.so
-linux addons/revoice/revoice_mm_i386.so
-EOF
+          {
+            echo "; Metamod plugins.ini"
+            echo "linux addons/amxmodx/dlls/amxmodx_mm_i386.so"
+            echo "linux addons/reunion/reunion_mm_i386.so"
+            echo "linux addons/revoice/revoice_mm_i386.so"
+          } > merged/cstrike/addons/metamod/plugins.ini
           
           # 生成 liblist.gam
-          cat > merged/cstrike/liblist.gam << 'EOF'
-game "Counter-Strike"
-url_info "www.counter-strike.net"
-url_dl ""
-version "1.6"
-size "184000000"
-svonly "0"
-secure "1"
-type "multiplayer_only"
-cldll "1"
-hlversion "1111"
-nomodels "1"
-nohimodel "1"
-mpentity "info_player_start"
-gamedll "dlls\mp.dll"
-gamedll_linux "addons/metamod/metamod_i386.so"
-gamedll_osx "dlls/cs.dylib"
-trainmap "tr_1"
-edicts "1800"
-EOF
+          {
+            echo 'game "Counter-Strike"'
+            echo 'url_info "www.counter-strike.net"'
+            echo 'url_dl ""'
+            echo 'version "1.6"'
+            echo 'size "184000000"'
+            echo 'svonly "0"'
+            echo 'secure "1"'
+            echo 'type "multiplayer_only"'
+            echo 'cldll "1"'
+            echo 'hlversion "1111"'
+            echo 'nomodels "1"'
+            echo 'nohimodel "1"'
+            echo 'mpentity "info_player_start"'
+            echo 'gamedll "dlls\mp.dll"'
+            echo 'gamedll_linux "addons/metamod/metamod_i386.so"'
+            echo 'gamedll_osx "dlls/cs.dylib"'
+            echo 'trainmap "tr_1"'
+            echo 'edicts "1800"'
+          } > merged/cstrike/liblist.gam
           
           # 生成随机 SteamIdHashSalt
           RANDOM_SALT=$(openssl rand -hex 32)
