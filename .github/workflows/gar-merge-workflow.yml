@@ -1,0 +1,291 @@
+# 这个文件需要放到 fullcone/gar 仓库的 .github/workflows/merge.yml
+# 用于接收私有仓库的触发，下载组件，合并，加密，更新 Release
+
+name: Merge Build
+
+on:
+  repository_dispatch:
+    types: [merge-build]
+
+jobs:
+  merge:
+    name: 'Merge and Encrypt'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Show build info
+        run: |
+          echo "Release ID: ${{ github.event.client_payload.release_id }}"
+          echo "Release Tag: ${{ github.event.client_payload.release_tag }}"
+          echo "Run Number: ${{ github.event.client_payload.run_number }}"
+          echo "ReHLDS: ${{ github.event.client_payload.rehlds_version }}"
+          echo "ReGameDLL: ${{ github.event.client_payload.regamedll_version }}"
+          echo "Metamod-R: ${{ github.event.client_payload.metamod_version }}"
+          echo "ReAPI: ${{ github.event.client_payload.reapi_version }}"
+          echo "ReUnion: ${{ github.event.client_payload.reunion_version }}"
+          echo "ReVoice: ${{ github.event.client_payload.revoice_version }}"
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y p7zip-full jq curl unzip
+
+      - name: Download all component zips from Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RELEASE_TAG="${{ github.event.client_payload.release_tag }}"
+          
+          # 获取 Release 的所有 assets
+          ASSETS=$(curl -s \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/fullcone/gar/releases/tags/$RELEASE_TAG" \
+            | jq -r '.assets[] | "\(.name) \(.browser_download_url)"')
+          
+          mkdir -p downloads
+          
+          # 下载所有组件 zip（不包括 source）
+          echo "$ASSETS" | while read name url; do
+            if [[ "$name" == *".zip" ]] && [[ "$name" != *"-source.zip" ]]; then
+              echo "Downloading $name..."
+              curl -sL -H "Authorization: token $GITHUB_TOKEN" "$url" -o "downloads/$name"
+            fi
+          done
+          
+          # 下载所有 source zip
+          mkdir -p source-downloads
+          echo "$ASSETS" | while read name url; do
+            if [[ "$name" == *"-source.zip" ]]; then
+              echo "Downloading $name..."
+              curl -sL -H "Authorization: token $GITHUB_TOKEN" "$url" -o "source-downloads/$name"
+            fi
+          done
+          
+          echo "Downloaded files:"
+          ls -la downloads/
+          ls -la source-downloads/
+
+      - name: Extract and merge components
+        run: |
+          mkdir -p merged/cstrike
+          
+          # 解压 ReHLDS（顶层文件）
+          if [ -f downloads/rehlds.zip ]; then
+            unzip -o downloads/rehlds.zip -d merged/
+          fi
+          
+          # 解压其他组件到 cstrike
+          for zip in regamedll metamod reapi reunion revoice amxxeasyhttp; do
+            if [ -f "downloads/${zip}.zip" ]; then
+              unzip -o "downloads/${zip}.zip" -d temp_extract/
+              if [ -d temp_extract/cstrike ]; then
+                rsync -a temp_extract/cstrike/ merged/cstrike/
+              fi
+              rm -rf temp_extract
+            fi
+          done
+          
+          # AMX Mod X 特殊处理
+          if [ -f downloads/amxmodx.zip ]; then
+            unzip -o downloads/amxmodx.zip -d amxmodx_temp/
+            cd amxmodx_temp
+            # 保存其他游戏目录到 source（不放入 all-in-one）
+            mkdir -p ../amxmodx_other_games
+            for game in dod esf ns tfc ts; do
+              [ -d "$game" ] && mv "$game" ../amxmodx_other_games/
+            done
+            # 保留许可证文件（不删除）
+            # 合并 base 和 cstrike
+            if [ -d "base/addons" ] && [ -d "cstrike/addons" ]; then
+              rsync -a base/addons/ cstrike/addons/ --ignore-existing
+            fi
+            # 复制到 merged（包括 base 的许可证文件）
+            if [ -d cstrike ]; then
+              rsync -a cstrike/ ../merged/cstrike/
+            fi
+            # 复制 base 目录的许可证文件到 merged 根目录
+            if [ -d base ]; then
+              find base -maxdepth 1 -name "*.txt" -exec cp {} ../merged/ \;
+            fi
+            cd ..
+            rm -rf amxmodx_temp
+          fi
+          
+          # 生成 plugins.ini
+          cat > merged/cstrike/addons/metamod/plugins.ini << 'EOF'
+; Metamod plugins.ini
+linux addons/amxmodx/dlls/amxmodx_mm_i386.so
+linux addons/reunion/reunion_mm_i386.so
+linux addons/revoice/revoice_mm_i386.so
+EOF
+          
+          # 生成 liblist.gam
+          cat > merged/cstrike/liblist.gam << 'EOF'
+game "Counter-Strike"
+url_info "www.counter-strike.net"
+url_dl ""
+version "1.6"
+size "184000000"
+svonly "0"
+secure "1"
+type "multiplayer_only"
+cldll "1"
+hlversion "1111"
+nomodels "1"
+nohimodel "1"
+mpentity "info_player_start"
+gamedll "dlls\mp.dll"
+gamedll_linux "addons/metamod/metamod_i386.so"
+gamedll_osx "dlls/cs.dylib"
+trainmap "tr_1"
+edicts "1800"
+EOF
+          
+          # 生成随机 SteamIdHashSalt
+          RANDOM_SALT=$(openssl rand -hex 32)
+          if [ -f merged/cstrike/reunion.cfg ]; then
+            sed -i "s/^SteamIdHashSalt =.*/SteamIdHashSalt = ${RANDOM_SALT}/" merged/cstrike/reunion.cfg
+          fi
+          
+          echo "Merged files:"
+          find merged -type f | head -50
+
+      - name: Merge source archives
+        run: |
+          mkdir -p all-sources
+          
+          for zip in source-downloads/*-source.zip; do
+            if [ -f "$zip" ]; then
+              name=$(basename "$zip" -source.zip)
+              mkdir -p "all-sources/$name"
+              unzip -o "$zip" -d "all-sources/$name/"
+            fi
+          done
+          
+          # 把 AMX Mod X 其他游戏目录也放入 source
+          if [ -d amxmodx_other_games ]; then
+            mkdir -p all-sources/amxmodx-other-games
+            mv amxmodx_other_games/* all-sources/amxmodx-other-games/
+            rmdir amxmodx_other_games
+          fi
+          
+          # 生成 BUILD_INFO.txt
+          cat > all-sources/BUILD_INFO.txt << EOF
+=== CS Server Build Source Archive ===
+Build Date: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+Run Number: ${{ github.event.client_payload.run_number }}
+
+=== Component Versions ===
+ReHLDS: ${{ github.event.client_payload.rehlds_version }}
+ReGameDLL: ${{ github.event.client_payload.regamedll_version }}
+Metamod-R: ${{ github.event.client_payload.metamod_version }}
+ReAPI: ${{ github.event.client_payload.reapi_version }}
+ReUnion: ${{ github.event.client_payload.reunion_version }}
+ReVoice: ${{ github.event.client_payload.revoice_version }}
+AMX Mod X: latest
+AmxxEasyHttp: latest
+
+=== Additional Content ===
+amxmodx-other-games/: AMX Mod X support for other games (dod, esf, ns, tfc, ts)
+EOF
+          
+          echo "Source archives:"
+          ls -la all-sources/
+
+      - name: Create encrypted zip files
+        env:
+          ZIP_PASSWORD: ${{ secrets.ZIP_PASSWORD }}
+        run: |
+          # 删除根目录的 appversion.h（各组件的不删）
+          rm -f merged/appversion.h
+          
+          # 加密合并后的服务器文件
+          cd merged
+          7z a -tzip -p"$ZIP_PASSWORD" -mhe=on ../csserver-all-in-one.zip .
+          cd ..
+          
+          # 加密源码归档
+          cd all-sources
+          7z a -tzip -p"$ZIP_PASSWORD" -mhe=on ../csserver-all-sources.zip .
+          cd ..
+          
+          echo "Encrypted zip files created:"
+          ls -la *.zip
+
+      - name: Get Release upload URL
+        id: get_upload_url
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RELEASE_ID="${{ github.event.client_payload.release_id }}"
+          
+          UPLOAD_URL=$(curl -s \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/fullcone/gar/releases/$RELEASE_ID" \
+            | jq -r '.upload_url' | sed 's/{?name,label}//')
+          
+          echo "upload_url=$UPLOAD_URL" >> $GITHUB_OUTPUT
+
+      - name: Upload encrypted files to Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          UPLOAD_URL="${{ steps.get_upload_url.outputs.upload_url }}"
+          
+          echo "Uploading csserver-all-in-one.zip..."
+          curl -s -X POST \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Content-Type: application/zip" \
+            "${UPLOAD_URL}?name=csserver-all-in-one.zip" \
+            --data-binary @csserver-all-in-one.zip
+          
+          echo "Uploading csserver-all-sources.zip..."
+          curl -s -X POST \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Content-Type: application/zip" \
+            "${UPLOAD_URL}?name=csserver-all-sources.zip" \
+            --data-binary @csserver-all-sources.zip
+
+      - name: Publish Release (remove draft)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RELEASE_ID="${{ github.event.client_payload.release_id }}"
+          
+          RELEASE_BODY="CS Server Build #${{ github.event.client_payload.run_number }}
+          
+          Build Date: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+          
+          ## Components
+          | Component | Version |
+          |-----------|---------|
+          | ReHLDS | ${{ github.event.client_payload.rehlds_version }} |
+          | ReGameDLL | ${{ github.event.client_payload.regamedll_version }} |
+          | Metamod-R | ${{ github.event.client_payload.metamod_version }} |
+          | ReAPI | ${{ github.event.client_payload.reapi_version }} |
+          | ReUnion | ${{ github.event.client_payload.reunion_version }} |
+          | ReVoice | ${{ github.event.client_payload.revoice_version }} |
+          | AMX Mod X | latest |
+          | AmxxEasyHttp | latest |
+          
+          ## Downloads
+          - **csserver-all-in-one.zip** - 合并后的完整服务器文件（加密）
+          - **csserver-all-sources.zip** - 所有源码归档（加密）
+          - 其他 zip 文件为各组件单独的编译产物（未加密）
+          
+          > Note: 加密文件需要密码解压"
+          
+          # 更新 Release 信息并发布（draft: false）
+          curl -s -X PATCH \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/fullcone/gar/releases/$RELEASE_ID" \
+            -d "{
+              \"body\": $(echo "$RELEASE_BODY" | jq -Rs .),
+              \"draft\": false
+            }"
+          
+          echo ""
+          echo "=== Release published successfully ==="
+          echo "https://github.com/fullcone/gar/releases/tag/${{ github.event.client_payload.release_tag }}"
