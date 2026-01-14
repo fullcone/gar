@@ -393,50 +393,11 @@ jobs:
           # Install modelscope
           pip install modelscope -q
           
-          echo "=== Testing multiple upload methods ==="
+          # Upload using CLI with explicit path_in_repo (this works reliably)
+          echo "Uploading to ModelScope..."
+          modelscope upload q9113979/yuyinceshi csserver-all-in-one.7z voice.7z \
+            --commit-message "CS Server Build #${{ github.event.client_payload.run_number }}" \
+            --token "$MODELSCOPE_TOKEN"
           
-          # Method 1: Python SDK api.upload_file()
-          echo ""
-          echo "=== Method 1: Python SDK api.upload_file() -> voice_sdk.7z ==="
-          {
-            echo "import os"
-            echo "from modelscope.hub.api import HubApi"
-            echo ""
-            echo "token = os.environ.get('MODELSCOPE_TOKEN')"
-            echo "api = HubApi()"
-            echo "api.login(token)"
-            echo ""
-            echo "api.upload_file("
-            echo "    path_or_fileobj='csserver-all-in-one.7z',"
-            echo "    path_in_repo='voice_sdk.7z',"
-            echo "    repo_id='q9113979/yuyinceshi',"
-            echo "    commit_message='test model - SDK upload_file'"
-            echo ")"
-            echo "print('SDK upload_file completed')"
-          } > upload_sdk.py
-          python3 upload_sdk.py || echo "SDK upload_file failed"
-          
-          # Method 2: CLI with absolute path
-          echo ""
-          echo "=== Method 2: CLI with absolute path -> voice_cli_abs.7z ==="
-          modelscope upload q9113979/yuyinceshi "$(pwd)/csserver-all-in-one.7z" voice_cli_abs.7z \
-            --commit-message "test model - CLI absolute path" \
-            --token "$MODELSCOPE_TOKEN" || echo "CLI absolute path failed"
-          
-          # Method 3: CLI with relative path (original)
-          echo ""
-          echo "=== Method 3: CLI with relative path -> voice_cli_rel.7z ==="
-          modelscope upload q9113979/yuyinceshi csserver-all-in-one.7z voice_cli_rel.7z \
-            --commit-message "test model - CLI relative path" \
-            --token "$MODELSCOPE_TOKEN" || echo "CLI relative path failed"
-          
-          # Method 4: CLI upload file directly (no rename)
-          echo ""
-          echo "=== Method 4: CLI no rename -> csserver-all-in-one.7z ==="
-          modelscope upload q9113979/yuyinceshi csserver-all-in-one.7z \
-            --commit-message "test model - CLI no rename" \
-            --token "$MODELSCOPE_TOKEN" || echo "CLI no rename failed"
-          
-          echo ""
-          echo "=== All upload methods completed ==="
-          echo "Check https://www.modelscope.cn/models/q9113979/yuyinceshi/files to see which files are correct size"
+          echo "ModelScope upload completed"
+          echo "Download: https://www.modelscope.cn/models/q9113979/yuyinceshi/resolve/master/voice.7z"
