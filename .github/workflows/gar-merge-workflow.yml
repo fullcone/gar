@@ -86,7 +86,7 @@ jobs:
           echo "Fetching Release info for ID: $RELEASE_ID (tag: $RELEASE_TAG)"
           
           # Wait for assets to be available
-          MAX_RETRIES=30
+          MAX_RETRIES=60
           RETRY_COUNT=0
           ASSET_COUNT=0
           
@@ -111,7 +111,7 @@ jobs:
             fi
             
             echo "Waiting for assets..."
-            sleep 10
+            sleep 20
             RETRY_COUNT=$((RETRY_COUNT+1))
           done
           
