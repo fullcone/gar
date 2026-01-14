@@ -33,31 +33,53 @@ jobs:
         env:
           GAR_REPO_TOKEN: ${{ secrets.GAR_REPO_TOKEN }}
         run: |
+          RELEASE_ID="${{ github.event.client_payload.release_id }}"
           RELEASE_TAG="${{ github.event.client_payload.release_tag }}"
           
-          # Get all Release assets
-          ASSETS=$(curl -s \
+          echo "Fetching Release info for ID: $RELEASE_ID (tag: $RELEASE_TAG)"
+          
+          # Get Release info by ID (works for draft releases)
+          RELEASE_INFO=$(curl -s \
             -H "Authorization: token $GAR_REPO_TOKEN" \
             -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/repos/fullcone/gar/releases/tags/$RELEASE_TAG" \
-            | jq -r '.assets[] | "\(.name) \(.browser_download_url)"')
+            "https://api.github.com/repos/fullcone/gar/releases/$RELEASE_ID")
+          
+          # Debug: show release info
+          echo "Release info:"
+          echo "$RELEASE_INFO" | jq -r '"Tag: \(.tag_name), Draft: \(.draft), ID: \(.id)"' || echo "Failed to parse release info"
+          
+          # Check if release exists
+          if echo "$RELEASE_INFO" | jq -e '.message' > /dev/null 2>&1; then
+            echo "Error: $(echo "$RELEASE_INFO" | jq -r '.message')"
+            exit 1
+          fi
+          
+          # Check if assets exist
+          ASSET_COUNT=$(echo "$RELEASE_INFO" | jq -r '.assets | length')
+          echo "Found $ASSET_COUNT assets"
+          
+          if [ "$ASSET_COUNT" -eq 0 ]; then
+            echo "Error: No assets found in release"
+            exit 1
+          fi
           
           mkdir -p downloads
-          
-          # Download all component zips (excluding source)
-          echo "$ASSETS" | while read name url; do
-            if [[ "$name" == *".zip" ]] && [[ "$name" != *"-source.zip" ]]; then
-              echo "Downloading $name..."
-              curl -sL -H "Authorization: token $GAR_REPO_TOKEN" "$url" -o "downloads/$name"
-            fi
-          done
-          
-          # Download all source zips
           mkdir -p source-downloads
-          echo "$ASSETS" | while read name url; do
+          
+          # Download all assets using asset API URL
+          echo "$RELEASE_INFO" | jq -r '.assets[] | "\(.name) \(.url)"' | while read name url; do
             if [[ "$name" == *"-source.zip" ]]; then
-              echo "Downloading $name..."
-              curl -sL -H "Authorization: token $GAR_REPO_TOKEN" "$url" -o "source-downloads/$name"
+              echo "Downloading source: $name..."
+              curl -sL \
+                -H "Authorization: token $GAR_REPO_TOKEN" \
+                -H "Accept: application/octet-stream" \
+                "$url" -o "source-downloads/$name"
+            elif [[ "$name" == *".zip" ]]; then
+              echo "Downloading component: $name..."
+              curl -sL \
+                -H "Authorization: token $GAR_REPO_TOKEN" \
+                -H "Accept: application/octet-stream" \
+                "$url" -o "downloads/$name"
             fi
           done
           
