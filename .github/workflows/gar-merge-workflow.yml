@@ -374,7 +374,7 @@ jobs:
           - **csserver-all-sources.7z** - All source archives (encrypted)
           - Other zip files are individual component builds (unencrypted)
           
-          > Note: Encrypted files require password to extract
+          > Note: Encrypted files require password to extract"
           
           # Update Release info and publish (draft: false)
           curl -s -f -X PATCH \
