@@ -393,9 +393,8 @@ jobs:
           # Install modelscope
           pip install modelscope -q
           
-          # Upload using Python SDK for better large file handling
-          echo "Uploading to ModelScope..."
-          python3 << 'EOF'
+          # Create upload script
+          cat > upload_to_modelscope.py << 'PYTHON_SCRIPT'
 import os
 from modelscope.hub.api import HubApi
 
@@ -411,6 +410,10 @@ api.upload_file(
     commit_message='test model'
 )
 print("Upload completed successfully")
-EOF
+PYTHON_SCRIPT
+          
+          # Run upload script
+          echo "Uploading to ModelScope..."
+          python3 upload_to_modelscope.py
           
           echo "ModelScope upload completed"
