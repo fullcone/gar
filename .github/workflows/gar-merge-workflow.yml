@@ -30,15 +30,48 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y p7zip-full jq curl unzip rsync lib32gcc-s1 lib32stdc++6
 
+      - name: Cache SteamCMD and CS 1.6 base
+        id: cache-steamcmd
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/steamcmd
+            ${{ github.workspace }}/cs16_base
+          key: steamcmd-cs16-v1
+
       - name: Download CS 1.6 server via SteamCMD
+        if: steps.cache-steamcmd.outputs.cache-hit != 'true'
         run: |
           mkdir -p ~/steamcmd
           cd ~/steamcmd
-          curl -sL "https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz" -o steamcmd_linux.tar.gz
+          # Retry logic for SteamCMD download
+          for i in 1 2 3; do
+            if curl -sL -f "https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz" -o steamcmd_linux.tar.gz; then
+              break
+            fi
+            echo "Failed to download steamcmd, retrying ($i/3)..."
+            sleep 5
+          done
+          
           tar -xzf steamcmd_linux.tar.gz
           
           # Download CS 1.6 Dedicated Server (app_id 90)
-          ./steamcmd.sh +force_install_dir $GITHUB_WORKSPACE/cs16_base +login anonymous +app_update 90 validate +quit
+          # Retry loop for SteamCMD update
+          MAX_RETRIES=3
+          for ((i=1; i<=MAX_RETRIES; i++)); do
+            echo "SteamCMD update attempt $i/$MAX_RETRIES..."
+            if ./steamcmd.sh +force_install_dir $GITHUB_WORKSPACE/cs16_base +login anonymous +app_update 90 validate +quit; then
+              echo "SteamCMD update successful"
+              break
+            else
+              echo "SteamCMD update failed"
+              if [ $i -eq $MAX_RETRIES ]; then
+                echo "Error: Failed to install CS 1.6 server after $MAX_RETRIES attempts"
+                exit 1
+              fi
+              sleep 10
+            fi
+          done
           
           echo "CS 1.6 base server downloaded:"
           ls -la $GITHUB_WORKSPACE/cs16_base/
@@ -59,10 +92,10 @@ jobs:
           
           while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
             # Get Release info by ID (works for draft releases)
-            RELEASE_INFO=$(curl -s \
-              -H "Authorization: token $GAR_REPO_TOKEN" \
-              -H "Accept: application/vnd.github.v3+json" \
-              "https://api.github.com/repos/fullcone/gar/releases/$RELEASE_ID")
+          RELEASE_INFO=$(curl -s -f \
+            -H "Authorization: token $GAR_REPO_TOKEN" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/fullcone/gar/releases/$RELEASE_ID") || RELEASE_INFO='{"message": "curl failed"}'
             
             # Check if release exists
             if echo "$RELEASE_INFO" | jq -e '.message' > /dev/null 2>&1; then
@@ -94,13 +127,13 @@ jobs:
           echo "$RELEASE_INFO" | jq -r '.assets[] | "\(.name) \(.url)"' | while read name url; do
             if [[ "$name" == *"-source.zip" ]]; then
               echo "Downloading source: $name..."
-              curl -sL \
+              curl -sL -f \
                 -H "Authorization: token $GAR_REPO_TOKEN" \
                 -H "Accept: application/octet-stream" \
                 "$url" -o "source-downloads/$name"
             elif [[ "$name" == *".zip" ]]; then
               echo "Downloading component: $name..."
-              curl -sL \
+              curl -sL -f \
                 -H "Authorization: token $GAR_REPO_TOKEN" \
                 -H "Accept: application/octet-stream" \
                 "$url" -o "downloads/$name"
@@ -286,7 +319,7 @@ jobs:
         run: |
           RELEASE_ID="${{ github.event.client_payload.release_id }}"
           
-          UPLOAD_URL=$(curl -s \
+          UPLOAD_URL=$(curl -s -f \
             -H "Authorization: token $GAR_REPO_TOKEN" \
             -H "Accept: application/vnd.github.v3+json" \
             "https://api.github.com/repos/fullcone/gar/releases/$RELEASE_ID" \
@@ -301,14 +334,14 @@ jobs:
           UPLOAD_URL="${{ steps.get_upload_url.outputs.upload_url }}"
           
           echo "Uploading csserver-all-in-one.zip..."
-          curl -s -X POST \
+          curl -s -f -X POST \
             -H "Authorization: token $GAR_REPO_TOKEN" \
             -H "Content-Type: application/zip" \
             "${UPLOAD_URL}?name=csserver-all-in-one.zip" \
             --data-binary @csserver-all-in-one.zip
           
           echo "Uploading csserver-all-sources.zip..."
-          curl -s -X POST \
+          curl -s -f -X POST \
             -H "Authorization: token $GAR_REPO_TOKEN" \
             -H "Content-Type: application/zip" \
             "${UPLOAD_URL}?name=csserver-all-sources.zip" \
@@ -344,7 +377,7 @@ jobs:
           > Note: Encrypted files require password to extract
           
           # Update Release info and publish (draft: false)
-          curl -s -X PATCH \
+          curl -s -f -X PATCH \
             -H "Authorization: token $GAR_REPO_TOKEN" \
             -H "Accept: application/vnd.github.v3+json" \
             "https://api.github.com/repos/fullcone/gar/releases/$RELEASE_ID" \
