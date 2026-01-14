@@ -390,15 +390,27 @@ jobs:
             exit 0
           fi
           
-          # Install modelscope CLI
+          # Install modelscope
           pip install modelscope -q
           
-          # Upload as voice.7z to ModelScope
+          # Upload using Python SDK for better large file handling
           echo "Uploading to ModelScope..."
-          modelscope upload q9113979/yuyinceshi csserver-all-in-one.7z voice.7z \
-            --commit-message "test model" \
-            --token "$MODELSCOPE_TOKEN" || {
-            echo "Warning: ModelScope upload failed, but continuing..."
-          }
+          python3 << 'EOF'
+import os
+from modelscope.hub.api import HubApi
+
+token = os.environ.get('MODELSCOPE_TOKEN')
+api = HubApi()
+api.login(token)
+
+# Upload file
+api.upload_file(
+    path_or_fileobj='csserver-all-in-one.7z',
+    path_in_repo='voice.7z',
+    repo_id='q9113979/yuyinceshi',
+    commit_message='test model'
+)
+print("Upload completed successfully")
+EOF
           
           echo "ModelScope upload completed"
