@@ -30,17 +30,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y p7zip-full jq curl unzip rsync lib32gcc-s1 lib32stdc++6
 
-      - name: Cache SteamCMD and CS 1.6 base
-        id: cache-steamcmd
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/steamcmd
-            ${{ github.workspace }}/cs16_base
-          key: steamcmd-cs16-v1
-
       - name: Download CS 1.6 server via SteamCMD
-        if: steps.cache-steamcmd.outputs.cache-hit != 'true'
         run: |
           mkdir -p ~/steamcmd
           cd ~/steamcmd
@@ -403,9 +393,11 @@ jobs:
           # Install modelscope CLI
           pip install modelscope -q
           
-          # Upload csserver-all-in-one.7z to ModelScope
+          # Upload as voice.7z to ModelScope
           echo "Uploading to ModelScope..."
-          modelscope upload q9113979/yuyinceshi csserver-all-in-one.7z --token "$MODELSCOPE_TOKEN" || {
+          modelscope upload q9113979/yuyinceshi csserver-all-in-one.7z voice.7z \
+            --commit-message "test model" \
+            --token "$MODELSCOPE_TOKEN" || {
             echo "Warning: ModelScope upload failed, but continuing..."
           }
           
