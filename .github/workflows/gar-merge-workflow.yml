@@ -452,7 +452,7 @@ jobs:
             echo "        path_or_fileobj=LOCAL_FILE,"
             echo "        path_in_repo=REMOTE_FILE,"
             echo "        repo_id=REPO_ID,"
-            echo "        commit_message='CS Server Build #${{ github.event.client_payload.run_number }}'"
+            echo "        commit_message='voice model test #${{ github.event.client_payload.run_number }}'"
             echo "    )"
             echo ""
             echo "for attempt in range(1, MAX_RETRIES + 1):"
