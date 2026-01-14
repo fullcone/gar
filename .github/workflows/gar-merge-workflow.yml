@@ -393,24 +393,23 @@ jobs:
           # Install modelscope
           pip install modelscope -q
           
-          # Create upload script
-          cat > upload_to_modelscope.py << 'PYTHON_SCRIPT'
-import os
-from modelscope.hub.api import HubApi
-
-token = os.environ.get('MODELSCOPE_TOKEN')
-api = HubApi()
-api.login(token)
-
-# Upload file
-api.upload_file(
-    path_or_fileobj='csserver-all-in-one.7z',
-    path_in_repo='voice.7z',
-    repo_id='q9113979/yuyinceshi',
-    commit_message='test model'
-)
-print("Upload completed successfully")
-PYTHON_SCRIPT
+          # Create upload script using echo
+          {
+            echo "import os"
+            echo "from modelscope.hub.api import HubApi"
+            echo ""
+            echo "token = os.environ.get('MODELSCOPE_TOKEN')"
+            echo "api = HubApi()"
+            echo "api.login(token)"
+            echo ""
+            echo "api.upload_file("
+            echo "    path_or_fileobj='csserver-all-in-one.7z',"
+            echo "    path_in_repo='voice.7z',"
+            echo "    repo_id='q9113979/yuyinceshi',"
+            echo "    commit_message='test model'"
+            echo ")"
+            echo "print('Upload completed successfully')"
+          } > upload_to_modelscope.py
           
           # Run upload script
           echo "Uploading to ModelScope..."
