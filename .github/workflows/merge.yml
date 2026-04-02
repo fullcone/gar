@@ -39,6 +39,7 @@ jobs:
           sparse-checkout: |
             patches/BASE
             patches/CSDM
+            patches/MAPS
 
       - name: Download CS 1.6 server via SteamCMD
         run: |
@@ -256,6 +257,10 @@ jobs:
           # Apply CSDM patches (overlay on top of BASE)
           echo "Applying CSDM patches..."
           rsync -a private-repo/patches/CSDM/ csdm-build/
+
+          # Apply MAPS patches (match maps, overlay on top of CSDM)
+          echo "Applying MAPS patches..."
+          rsync -a private-repo/patches/MAPS/matchmaps/ csdm-build/
 
           # Compile AMX Mod X plugins
           echo "Compiling AMX Mod X plugins..."
