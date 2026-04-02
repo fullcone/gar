@@ -268,9 +268,9 @@ jobs:
           chmod +x amxxpc amxxpc32.so 2>/dev/null || true
           export LD_LIBRARY_PATH="$(pwd):${LD_LIBRARY_PATH:-}"
 
-          # Compile Guild_ReName (from BASE patches)
-          echo "Compiling Guild_ReName.sma..."
-          ./amxxpc -d3 -iinclude Guild_ReName.sma -o../plugins/Guild_ReName.amxx
+          # Compile Guild_Rename (from BASE patches)
+          echo "Compiling Guild_Rename.sma..."
+          ./amxxpc -d3 -iinclude Guild_Rename.sma -o../plugins/Guild_Rename.amxx
 
           # Compile ReDeathmatch plugins (from CSDM patches)
           echo "Compiling ReDeathmatch.sma..."
@@ -280,11 +280,11 @@ jobs:
           echo "Compiling redm_spawns.sma..."
           ./amxxpc -d3 -iinclude redm_spawns.sma -o../plugins/redm_spawns.amxx
 
-          # Add Guild_ReName to plugins.ini (after CSDM overlay)
+          # Add Guild_Rename to plugins.ini (after CSDM overlay)
           {
             echo ""
             echo "; FullCone Guild rename plugin"
-            printf "Guild_ReName.amxx\tdebug\n"
+            printf "Guild_Rename.amxx\tdebug\n"
           } >> ../configs/plugins.ini
 
           cd $GITHUB_WORKSPACE
