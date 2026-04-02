@@ -30,6 +30,16 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y p7zip-full jq curl unzip rsync lib32gcc-s1 lib32stdc++6
 
+      - name: Checkout private repo for patches
+        uses: actions/checkout@v4
+        with:
+          repository: fullcone/csserver_build
+          token: ${{ secrets.GAR_REPO_TOKEN }}
+          path: private-repo
+          sparse-checkout: |
+            patches/BASE
+            patches/CSDM
+
       - name: Download CS 1.6 server via SteamCMD
         run: |
           mkdir -p ~/steamcmd
@@ -233,6 +243,55 @@ jobs:
           echo "Merged files:"
           find merged -type f | head -50
 
+      - name: Build CSDM server variant
+        run: |
+          # Mirror the merged server directory for CSDM variant
+          echo "Creating CSDM server variant..."
+          cp -r merged csdm-build
+
+          # Apply BASE patches first
+          echo "Applying BASE patches..."
+          rsync -a private-repo/patches/BASE/ csdm-build/
+
+          # Apply CSDM patches (overlay on top of BASE)
+          echo "Applying CSDM patches..."
+          rsync -a private-repo/patches/CSDM/ csdm-build/
+
+          # Compile AMX Mod X plugins
+          echo "Compiling AMX Mod X plugins..."
+          cd csdm-build/cstrike/addons/amxmodx/scripting
+          chmod +x amxxpc amxxpc32.so 2>/dev/null || true
+          export LD_LIBRARY_PATH="$(pwd):${LD_LIBRARY_PATH:-}"
+
+          # Compile Guild_ReName (from BASE patches)
+          echo "Compiling Guild_ReName.sma..."
+          ./amxxpc -d3 -iinclude Guild_ReName.sma -o../plugins/Guild_ReName.amxx
+
+          # Compile ReDeathmatch plugins (from CSDM patches)
+          echo "Compiling ReDeathmatch.sma..."
+          ./amxxpc -d3 -iinclude ReDeathmatch.sma -o../plugins/ReDeathmatch.amxx
+          echo "Compiling redm_bot_names.sma..."
+          ./amxxpc -d3 -iinclude redm_bot_names.sma -o../plugins/redm_bot_names.amxx
+          echo "Compiling redm_spawns.sma..."
+          ./amxxpc -d3 -iinclude redm_spawns.sma -o../plugins/redm_spawns.amxx
+
+          # Add Guild_ReName to plugins.ini (after CSDM overlay)
+          {
+            echo ""
+            echo "; FullCone Guild rename plugin"
+            printf "Guild_ReName.amxx\tdebug\n"
+          } >> ../configs/plugins.ini
+
+          cd $GITHUB_WORKSPACE
+
+          echo "CSDM server variant built successfully"
+          echo "=== Compiled plugins ==="
+          find csdm-build -name "*.amxx" | sort
+          echo "=== plugins.ini ==="
+          cat csdm-build/cstrike/addons/amxmodx/configs/plugins.ini
+          echo "=== plugins-redm.ini ==="
+          cat csdm-build/cstrike/addons/amxmodx/configs/plugins-redm.ini
+
       - name: Merge source archives
         env:
           ZIP_PASSWORD: ${{ secrets.ZIP_PASSWORD }}
@@ -302,6 +361,11 @@ jobs:
           7z a -t7z -p"${ZIP_PASSWORD}" -mhe=on ../csserver-all-sources.7z *
           cd ..
           
+          # Encrypt CSDM server files
+          cd csdm-build
+          7z a -t7z -p"${ZIP_PASSWORD}" -mhe=on ../csdm.7z *
+          cd ..
+
           echo "Encrypted 7z files created:"
           ls -la *.7z
           
@@ -359,6 +423,18 @@ jobs:
             echo "Upload retry $i..."
             sleep 5
           done
+
+          # 上传 csdm.7z（带重试）
+          echo "Uploading csdm.7z..."
+          for i in 1 2 3; do
+            curl -s -f -X POST \
+              -H "Authorization: token $GAR_REPO_TOKEN" \
+              -H "Content-Type: application/x-7z-compressed" \
+              "${UPLOAD_URL}?name=csdm.7z" \
+              --data-binary @csdm.7z && break
+            echo "Upload retry $i..."
+            sleep 5
+          done
           
       - name: Publish Release (remove draft)
         env:
@@ -385,6 +461,7 @@ jobs:
           ## Downloads
           - **csserver-all-in-one.7z** - Merged complete server files (encrypted)
           - **csserver-all-sources.7z** - All source archives (encrypted)
+          - **csdm.7z** - CSDM (ReDeathmatch) server variant (encrypted)
           - Other zip files are individual component builds (unencrypted)
           
           > Note: Encrypted files require password to extract"
