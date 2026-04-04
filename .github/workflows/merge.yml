@@ -251,10 +251,14 @@ jobs:
           echo "Creating CSDM server variant..."
           cp -r merged csdm-build
 
-          # Apply patch layers (exclude plugins.ini, merge it separately)
+          # BASE is the baseline — full overwrite including plugins.ini
+          echo "Applying BASE patches (baseline, full overwrite)..."
+          rsync -a private-repo/patches/BASE/ csdm-build/
+
+          # Subsequent layers: rsync files but exclude plugins.ini, merge it via diff
           PLUGINS_INI="cstrike/addons/amxmodx/configs/plugins.ini"
 
-          for layer in BASE CSDM YULE; do
+          for layer in CSDM YULE; do
             echo "Applying $layer patches..."
             rsync -a --exclude="$PLUGINS_INI" "private-repo/patches/$layer/" csdm-build/
           done
@@ -262,21 +266,17 @@ jobs:
           echo "Applying MAPS patches..."
           rsync -a private-repo/patches/MAPS/matchmaps/ csdm-build/
 
-          # Merge plugins.ini: diff each layer, append new .amxx entries
-          echo "Merging plugins.ini from all layers..."
+          # Merge plugins.ini: diff CSDM/YULE layers, append new .amxx entries
+          echo "Merging plugins.ini from overlay layers..."
           DEST="csdm-build/$PLUGINS_INI"
-          # Start with the vanilla AMXX plugins.ini already in csdm-build
-          for layer in BASE CSDM YULE; do
+          for layer in CSDM YULE; do
             SRC="private-repo/patches/$layer/$PLUGINS_INI"
             [ -f "$SRC" ] || continue
             echo "  merging from $layer..."
             while IFS= read -r line; do
-              # Skip empty lines and pure comments
               [[ -z "$line" || "$line" =~ ^[[:space:]]*\;.*$ ]] && continue
-              # Extract .amxx filename for dedup check
               amxx=$(echo "$line" | grep -oE '[^[:space:]]+\.amxx' || true)
               [ -z "$amxx" ] && continue
-              # If this plugin is not already in dest, append with layer comment
               if ! grep -qF "$amxx" "$DEST" 2>/dev/null; then
                 echo "" >> "$DEST"
                 echo "; --- from $layer ---" >> "$DEST"
