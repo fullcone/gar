@@ -39,6 +39,7 @@ jobs:
           sparse-checkout: |
             patches/BASE
             patches/CSDM
+            patches/YULE
             patches/MAPS
 
       - name: Download CS 1.6 server via SteamCMD
@@ -250,17 +251,41 @@ jobs:
           echo "Creating CSDM server variant..."
           cp -r merged csdm-build
 
-          # Apply BASE patches first
-          echo "Applying BASE patches..."
-          rsync -a private-repo/patches/BASE/ csdm-build/
+          # Apply patch layers (exclude plugins.ini, merge it separately)
+          PLUGINS_INI="cstrike/addons/amxmodx/configs/plugins.ini"
 
-          # Apply CSDM patches (overlay on top of BASE)
-          echo "Applying CSDM patches..."
-          rsync -a private-repo/patches/CSDM/ csdm-build/
+          for layer in BASE CSDM YULE; do
+            echo "Applying $layer patches..."
+            rsync -a --exclude="$PLUGINS_INI" "private-repo/patches/$layer/" csdm-build/
+          done
 
-          # Apply MAPS patches (match maps, overlay on top of CSDM)
           echo "Applying MAPS patches..."
           rsync -a private-repo/patches/MAPS/matchmaps/ csdm-build/
+
+          # Merge plugins.ini: diff each layer, append new .amxx entries
+          echo "Merging plugins.ini from all layers..."
+          DEST="csdm-build/$PLUGINS_INI"
+          # Start with the vanilla AMXX plugins.ini already in csdm-build
+          for layer in BASE CSDM YULE; do
+            SRC="private-repo/patches/$layer/$PLUGINS_INI"
+            [ -f "$SRC" ] || continue
+            echo "  merging from $layer..."
+            while IFS= read -r line; do
+              # Skip empty lines and pure comments
+              [[ -z "$line" || "$line" =~ ^[[:space:]]*\;.*$ ]] && continue
+              # Extract .amxx filename for dedup check
+              amxx=$(echo "$line" | grep -oE '[^[:space:]]+\.amxx' || true)
+              [ -z "$amxx" ] && continue
+              # If this plugin is not already in dest, append with layer comment
+              if ! grep -qF "$amxx" "$DEST" 2>/dev/null; then
+                echo "" >> "$DEST"
+                echo "; --- from $layer ---" >> "$DEST"
+                echo "$line" >> "$DEST"
+              fi
+            done < "$SRC"
+          done
+          echo "=== Merged plugins.ini ==="
+          cat "$DEST"
 
           # Compile AMX Mod X plugins
           echo "Compiling AMX Mod X plugins..."
@@ -268,11 +293,11 @@ jobs:
           chmod +x amxxpc amxxpc32.so 2>/dev/null || true
           export LD_LIBRARY_PATH="$(pwd):${LD_LIBRARY_PATH:-}"
 
-          # Compile Guild_Rename (from BASE patches)
+          # Compile Guild_Rename (from BASE)
           echo "Compiling Guild_Rename.sma..."
           ./amxxpc -d3 -iinclude Guild_Rename.sma -o../plugins/Guild_Rename.amxx
 
-          # Compile ReDeathmatch plugins (from CSDM patches)
+          # Compile ReDeathmatch plugins (from CSDM)
           echo "Compiling ReDeathmatch.sma..."
           ./amxxpc -d3 -iinclude ReDeathmatch.sma -o../plugins/ReDeathmatch.amxx
           echo "Compiling redm_bot_names.sma..."
@@ -280,12 +305,9 @@ jobs:
           echo "Compiling redm_spawns.sma..."
           ./amxxpc -d3 -iinclude redm_spawns.sma -o../plugins/redm_spawns.amxx
 
-          # Add Guild_Rename to plugins.ini (after CSDM overlay)
-          {
-            echo ""
-            echo "; FullCone Guild rename plugin"
-            printf "Guild_Rename.amxx\tdebug\n"
-          } >> ../configs/plugins.ini
+          # Compile ShowKill (from YULE)
+          echo "Compiling ShowKill.sma..."
+          ./amxxpc -d3 -iinclude ShowKill.sma -o../plugins/ShowKill.amxx
 
           cd $GITHUB_WORKSPACE
 
