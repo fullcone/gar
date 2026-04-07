@@ -41,6 +41,7 @@ jobs:
             patches/CSDM
             patches/YULE
             patches/MAPS
+            patches/RespawnMoD
 
       - name: Download CS 1.6 server via SteamCMD
         run: |
@@ -256,9 +257,10 @@ jobs:
           rsync -a private-repo/patches/BASE/ csdm-build/
 
           # Subsequent layers: rsync files but exclude plugins.ini, merge it via diff
+          # Order: BASE → YULE → CSDM
           PLUGINS_INI="cstrike/addons/amxmodx/configs/plugins.ini"
 
-          for layer in CSDM YULE; do
+          for layer in YULE CSDM; do
             echo "Applying $layer patches..."
             rsync -a --exclude="$PLUGINS_INI" "private-repo/patches/$layer/" csdm-build/
           done
@@ -266,10 +268,10 @@ jobs:
           echo "Applying MAPS patches..."
           rsync -a private-repo/patches/MAPS/matchmaps/ csdm-build/
 
-          # Merge plugins.ini: diff CSDM/YULE layers, append new .amxx entries
+          # Merge plugins.ini: diff YULE/CSDM layers, append new .amxx entries
           echo "Merging plugins.ini from overlay layers..."
           DEST="csdm-build/$PLUGINS_INI"
-          for layer in CSDM YULE; do
+          for layer in YULE CSDM; do
             SRC="private-repo/patches/$layer/$PLUGINS_INI"
             [ -f "$SRC" ] || continue
             echo "  merging from $layer..."
@@ -318,6 +320,75 @@ jobs:
           cat csdm-build/cstrike/addons/amxmodx/configs/plugins.ini
           echo "=== plugins-redm.ini ==="
           cat csdm-build/cstrike/addons/amxmodx/configs/plugins-redm.ini
+
+      - name: Build Respawn server variant
+        run: |
+          # Mirror the merged server directory for Respawn variant
+          echo "Creating Respawn server variant..."
+          cp -r merged respawn-build
+
+          # BASE is the baseline — full overwrite including plugins.ini
+          echo "Applying BASE patches (baseline, full overwrite)..."
+          rsync -a private-repo/patches/BASE/ respawn-build/
+
+          # Subsequent layers: rsync files but exclude plugins.ini, merge it via diff
+          # Order: BASE → YULE → RespawnMoD
+          PLUGINS_INI="cstrike/addons/amxmodx/configs/plugins.ini"
+
+          for layer in YULE RespawnMoD; do
+            echo "Applying $layer patches..."
+            rsync -a --exclude="$PLUGINS_INI" "private-repo/patches/$layer/" respawn-build/
+          done
+
+          echo "Applying MAPS patches..."
+          rsync -a private-repo/patches/MAPS/matchmaps/ respawn-build/
+
+          # Merge plugins.ini: diff YULE/RespawnMoD layers, append new .amxx entries
+          echo "Merging plugins.ini from overlay layers..."
+          DEST="respawn-build/$PLUGINS_INI"
+          for layer in YULE RespawnMoD; do
+            SRC="private-repo/patches/$layer/$PLUGINS_INI"
+            [ -f "$SRC" ] || continue
+            echo "  merging from $layer..."
+            while IFS= read -r line; do
+              [[ -z "$line" || "$line" =~ ^[[:space:]]*\;.*$ ]] && continue
+              amxx=$(echo "$line" | grep -oE '[^[:space:]]+\.amxx' || true)
+              [ -z "$amxx" ] && continue
+              if ! grep -qF "$amxx" "$DEST" 2>/dev/null; then
+                echo "" >> "$DEST"
+                echo "; --- from $layer ---" >> "$DEST"
+                echo "$line" >> "$DEST"
+              fi
+            done < "$SRC"
+          done
+          echo "=== Merged plugins.ini ==="
+          cat "$DEST"
+
+          # Compile AMX Mod X plugins
+          echo "Compiling AMX Mod X plugins..."
+          cd respawn-build/cstrike/addons/amxmodx/scripting
+          chmod +x amxxpc amxxpc32.so 2>/dev/null || true
+          export LD_LIBRARY_PATH="$(pwd):${LD_LIBRARY_PATH:-}"
+
+          # Compile Guild_Rename (from BASE)
+          echo "Compiling Guild_Rename.sma..."
+          ./amxxpc -d3 -iinclude Guild_Rename.sma -o../plugins/Guild_Rename.amxx
+
+          # Compile Dokee_Respawn (from RespawnMoD)
+          echo "Compiling Dokee_Respawn.sma..."
+          ./amxxpc -d3 -iinclude Dokee_Respawn.sma -o../plugins/Dokee_Respawn.amxx
+
+          # Compile ShowKill (from YULE)
+          echo "Compiling ShowKill.sma..."
+          ./amxxpc -d3 -iinclude ShowKill.sma -o../plugins/ShowKill.amxx
+
+          cd $GITHUB_WORKSPACE
+
+          echo "Respawn server variant built successfully"
+          echo "=== Compiled plugins ==="
+          find respawn-build -name "*.amxx" | sort
+          echo "=== plugins.ini ==="
+          cat respawn-build/cstrike/addons/amxmodx/configs/plugins.ini
 
       - name: Merge source archives
         env:
@@ -393,6 +464,11 @@ jobs:
           7z a -t7z -p"${ZIP_PASSWORD}" -mhe=on ../csdm.7z *
           cd ..
 
+          # Encrypt Respawn server files
+          cd respawn-build
+          7z a -t7z -p"${ZIP_PASSWORD}" -mhe=on ../respawn.7z *
+          cd ..
+
           echo "Encrypted 7z files created:"
           ls -la *.7z
           
@@ -462,6 +538,18 @@ jobs:
             echo "Upload retry $i..."
             sleep 5
           done
+
+          # 上传 respawn.7z（带重试）
+          echo "Uploading respawn.7z..."
+          for i in 1 2 3; do
+            curl -s -f -X POST \
+              -H "Authorization: token $GAR_REPO_TOKEN" \
+              -H "Content-Type: application/x-7z-compressed" \
+              "${UPLOAD_URL}?name=respawn.7z" \
+              --data-binary @respawn.7z && break
+            echo "Upload retry $i..."
+            sleep 5
+          done
           
       - name: Publish Release (remove draft)
         env:
@@ -489,6 +577,7 @@ jobs:
           - **csserver-all-in-one.7z** - Merged complete server files (encrypted)
           - **csserver-all-sources.7z** - All source archives (encrypted)
           - **csdm.7z** - CSDM (ReDeathmatch) server variant (encrypted)
+          - **respawn.7z** - Respawn (歼灭复活) server variant (encrypted)
           - Other zip files are individual component builds (unencrypted)
           
           > Note: Encrypted files require password to extract"
