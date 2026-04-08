@@ -42,6 +42,7 @@ jobs:
             patches/YULE
             patches/MAPS
             patches/RespawnMoD
+            patches/GOMatch
 
       - name: Download CS 1.6 server via SteamCMD
         run: |
@@ -295,9 +296,9 @@ jobs:
           chmod +x amxxpc amxxpc32.so 2>/dev/null || true
           export LD_LIBRARY_PATH="$(pwd):${LD_LIBRARY_PATH:-}"
 
-          # Compile Guild_Rename (from BASE)
-          echo "Compiling Guild_Rename.sma..."
-          ./amxxpc -d3 -iinclude Guild_Rename.sma -o../plugins/Guild_Rename.amxx
+          # Compile guild_auth (from BASE)
+          echo "Compiling guild_auth.sma..."
+          ./amxxpc -d3 -iinclude guild_auth.sma -o../plugins/guild_auth.amxx
 
           # Compile ReDeathmatch plugins (from CSDM)
           echo "Compiling ReDeathmatch.sma..."
@@ -370,9 +371,9 @@ jobs:
           chmod +x amxxpc amxxpc32.so 2>/dev/null || true
           export LD_LIBRARY_PATH="$(pwd):${LD_LIBRARY_PATH:-}"
 
-          # Compile Guild_Rename (from BASE)
-          echo "Compiling Guild_Rename.sma..."
-          ./amxxpc -d3 -iinclude Guild_Rename.sma -o../plugins/Guild_Rename.amxx
+          # Compile guild_auth (from BASE)
+          echo "Compiling guild_auth.sma..."
+          ./amxxpc -d3 -iinclude guild_auth.sma -o../plugins/guild_auth.amxx
 
           # Compile Dokee_Respawn (from RespawnMoD)
           echo "Compiling Dokee_Respawn.sma..."
@@ -389,6 +390,76 @@ jobs:
           find respawn-build -name "*.amxx" | sort
           echo "=== plugins.ini ==="
           cat respawn-build/cstrike/addons/amxmodx/configs/plugins.ini
+
+      - name: Build GOMatch server variant
+        run: |
+          # Mirror the merged server directory for GOMatch variant
+          echo "Creating GOMatch server variant..."
+          cp -r merged gomatch-build
+
+          # BASE is the baseline — full overwrite including plugins.ini
+          echo "Applying BASE patches (baseline, full overwrite)..."
+          rsync -a private-repo/patches/BASE/ gomatch-build/
+
+          # Order: BASE → GOMatch
+          PLUGINS_INI="cstrike/addons/amxmodx/configs/plugins.ini"
+
+          echo "Applying GOMatch patches..."
+          rsync -a --exclude="$PLUGINS_INI" "private-repo/patches/GOMatch/" gomatch-build/
+
+          echo "Applying MAPS patches..."
+          rsync -a private-repo/patches/MAPS/matchmaps/ gomatch-build/
+
+          # Merge plugins.ini: append GOMatch entries
+          echo "Merging plugins.ini from GOMatch layer..."
+          DEST="gomatch-build/$PLUGINS_INI"
+          SRC="private-repo/patches/GOMatch/$PLUGINS_INI"
+          if [ -f "$SRC" ]; then
+            while IFS= read -r line; do
+              [[ -z "$line" || "$line" =~ ^[[:space:]]*\;.*$ ]] && continue
+              amxx=$(echo "$line" | grep -oE '[^[:space:]]+\.amxx' || true)
+              [ -z "$amxx" ] && continue
+              if ! grep -qF "$amxx" "$DEST" 2>/dev/null; then
+                echo "" >> "$DEST"
+                echo "; --- from GOMatch ---" >> "$DEST"
+                echo "$line" >> "$DEST"
+              fi
+            done < "$SRC"
+          fi
+          echo "=== Merged plugins.ini ==="
+          cat "$DEST"
+
+          # Compile AMX Mod X plugins
+          echo "Compiling AMX Mod X plugins..."
+          cd gomatch-build/cstrike/addons/amxmodx/scripting
+          chmod +x amxxpc amxxpc32.so 2>/dev/null || true
+          export LD_LIBRARY_PATH="$(pwd):${LD_LIBRARY_PATH:-}"
+
+          # Compile guild_auth (from BASE)
+          echo "Compiling guild_auth.sma..."
+          ./amxxpc -d3 -iinclude guild_auth.sma -o../plugins/guild_auth.amxx
+
+          # Compile GOMatch plugins
+          echo "Compiling xgo_match.sma..."
+          ./amxxpc -d3 -iinclude xgo_match.sma -o../plugins/xgo_match.amxx
+          echo "Compiling match_reporter.sma..."
+          ./amxxpc -d3 -iinclude match_reporter.sma -o../plugins/match_reporter.amxx
+          echo "Compiling match_mvp.sma..."
+          ./amxxpc -d3 -iinclude match_mvp.sma -o../plugins/match_mvp.amxx
+          echo "Compiling player_hud.sma..."
+          ./amxxpc -d3 -iinclude player_hud.sma -o../plugins/player_hud.amxx
+          echo "Compiling freeze_auto.sma..."
+          ./amxxpc -d3 -iinclude freeze_auto.sma -o../plugins/freeze_auto.amxx
+          echo "Compiling score_balance.sma..."
+          ./amxxpc -d3 -iinclude score_balance.sma -o../plugins/score_balance.amxx
+
+          cd $GITHUB_WORKSPACE
+
+          echo "GOMatch server variant built successfully"
+          echo "=== Compiled plugins ==="
+          find gomatch-build -name "*.amxx" | sort
+          echo "=== plugins.ini ==="
+          cat gomatch-build/cstrike/addons/amxmodx/configs/plugins.ini
 
       - name: Merge source archives
         env:
@@ -467,6 +538,11 @@ jobs:
           # Encrypt Respawn server files
           cd respawn-build
           7z a -t7z -p"${ZIP_PASSWORD}" -mhe=on ../respawn.7z *
+          cd ..
+
+          # Encrypt GOMatch server files
+          cd gomatch-build
+          7z a -t7z -p"${ZIP_PASSWORD}" -mhe=on ../gomatch.7z *
           cd ..
 
           echo "Encrypted 7z files created:"
@@ -550,6 +626,18 @@ jobs:
             echo "Upload retry $i..."
             sleep 5
           done
+
+          # 上传 gomatch.7z（带重试）
+          echo "Uploading gomatch.7z..."
+          for i in 1 2 3; do
+            curl -s -f -X POST \
+              -H "Authorization: token $GAR_REPO_TOKEN" \
+              -H "Content-Type: application/x-7z-compressed" \
+              "${UPLOAD_URL}?name=gomatch.7z" \
+              --data-binary @gomatch.7z && break
+            echo "Upload retry $i..."
+            sleep 5
+          done
           
       - name: Publish Release (remove draft)
         env:
@@ -578,6 +666,7 @@ jobs:
           - **csserver-all-sources.7z** - All source archives (encrypted)
           - **csdm.7z** - CSDM (ReDeathmatch) server variant (encrypted)
           - **respawn.7z** - Respawn (歼灭复活) server variant (encrypted)
+          - **gomatch.7z** - GOMatch (比赛服) server variant (encrypted)
           - Other zip files are individual component builds (unencrypted)
           
           > Note: Encrypted files require password to extract"
