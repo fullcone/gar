@@ -308,9 +308,11 @@ jobs:
           echo "Compiling redm_spawns.sma..."
           ./amxxpc -d3 -iinclude redm_spawns.sma -o../plugins/redm_spawns.amxx
 
-          # Compile ShowKill (from YULE)
+          # Compile YULE plugins
           echo "Compiling ShowKill.sma..."
           ./amxxpc -d3 -iinclude ShowKill.sma -o../plugins/ShowKill.amxx
+          echo "Compiling map_menu.sma..."
+          ./amxxpc -d3 -iinclude map_menu.sma -o../plugins/map_menu.amxx
 
           cd $GITHUB_WORKSPACE
 
@@ -379,9 +381,11 @@ jobs:
           echo "Compiling Dokee_Respawn.sma..."
           ./amxxpc -d3 -iinclude Dokee_Respawn.sma -o../plugins/Dokee_Respawn.amxx
 
-          # Compile ShowKill (from YULE)
+          # Compile YULE plugins
           echo "Compiling ShowKill.sma..."
           ./amxxpc -d3 -iinclude ShowKill.sma -o../plugins/ShowKill.amxx
+          echo "Compiling map_menu.sma..."
+          ./amxxpc -d3 -iinclude map_menu.sma -o../plugins/map_menu.amxx
 
           cd $GITHUB_WORKSPACE
 
