@@ -255,7 +255,7 @@ jobs:
 
           # BASE is the baseline — full overwrite including plugins.ini
           echo "Applying BASE patches (baseline, full overwrite)..."
-          rsync -a private-repo/patches/BASE/ csdm-build/
+          rsync -a --ignore-times private-repo/patches/BASE/ csdm-build/
 
           # Subsequent layers: rsync files but exclude plugins.ini, merge it via diff
           # Order: BASE → YULE → CSDM
@@ -263,11 +263,11 @@ jobs:
 
           for layer in YULE CSDM; do
             echo "Applying $layer patches..."
-            rsync -a --exclude="$PLUGINS_INI" "private-repo/patches/$layer/" csdm-build/
+            rsync -a --ignore-times --exclude="$PLUGINS_INI" "private-repo/patches/$layer/" csdm-build/
           done
 
           echo "Applying MAPS patches..."
-          rsync -a private-repo/patches/MAPS/matchmaps/ csdm-build/
+          rsync -a --ignore-times private-repo/patches/MAPS/matchmaps/ csdm-build/
 
           # Merge plugins.ini: diff YULE/CSDM layers, append new .amxx entries
           echo "Merging plugins.ini from overlay layers..."
@@ -332,7 +332,7 @@ jobs:
 
           # BASE is the baseline — full overwrite including plugins.ini
           echo "Applying BASE patches (baseline, full overwrite)..."
-          rsync -a private-repo/patches/BASE/ respawn-build/
+          rsync -a --ignore-times private-repo/patches/BASE/ respawn-build/
 
           # Subsequent layers: rsync files but exclude plugins.ini, merge it via diff
           # Order: BASE → YULE → RespawnMoD
@@ -340,11 +340,11 @@ jobs:
 
           for layer in YULE RespawnMoD; do
             echo "Applying $layer patches..."
-            rsync -a --exclude="$PLUGINS_INI" "private-repo/patches/$layer/" respawn-build/
+            rsync -a --ignore-times --exclude="$PLUGINS_INI" "private-repo/patches/$layer/" respawn-build/
           done
 
           echo "Applying MAPS patches..."
-          rsync -a private-repo/patches/MAPS/matchmaps/ respawn-build/
+          rsync -a --ignore-times private-repo/patches/MAPS/matchmaps/ respawn-build/
 
           # Merge plugins.ini: diff YULE/RespawnMoD layers, append new .amxx entries
           echo "Merging plugins.ini from overlay layers..."
@@ -403,16 +403,16 @@ jobs:
 
           # BASE is the baseline — full overwrite including plugins.ini
           echo "Applying BASE patches (baseline, full overwrite)..."
-          rsync -a private-repo/patches/BASE/ gomatch-build/
+          rsync -a --ignore-times private-repo/patches/BASE/ gomatch-build/
 
           # Order: BASE → GOMatch
           PLUGINS_INI="cstrike/addons/amxmodx/configs/plugins.ini"
 
           echo "Applying GOMatch patches..."
-          rsync -a --exclude="$PLUGINS_INI" "private-repo/patches/GOMatch/" gomatch-build/
+          rsync -a --ignore-times --exclude="$PLUGINS_INI" "private-repo/patches/GOMatch/" gomatch-build/
 
           echo "Applying MAPS patches..."
-          rsync -a private-repo/patches/MAPS/matchmaps/ gomatch-build/
+          rsync -a --ignore-times private-repo/patches/MAPS/matchmaps/ gomatch-build/
 
           # Merge plugins.ini: append GOMatch entries
           echo "Merging plugins.ini from GOMatch layer..."
