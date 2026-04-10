@@ -585,65 +585,32 @@ jobs:
         run: |
           UPLOAD_URL="${{ steps.get_upload_url.outputs.upload_url }}"
           
-          # 上传 csserver-all-in-one.7z（带重试）
-          echo "Uploading csserver-all-in-one.7z..."
-          for i in 1 2 3; do
-            curl -s -f -X POST \
-              -H "Authorization: token $GAR_REPO_TOKEN" \
-              -H "Content-Type: application/x-7z-compressed" \
-              "${UPLOAD_URL}?name=csserver-all-in-one.7z" \
-              --data-binary @csserver-all-in-one.7z && break
-            echo "Upload retry $i..."
-            sleep 5
-          done
-          
-          # 上传 csserver-all-sources.7z（带重试）
-          echo "Uploading csserver-all-sources.7z..."
-          for i in 1 2 3; do
-            curl -s -f -X POST \
-              -H "Authorization: token $GAR_REPO_TOKEN" \
-              -H "Content-Type: application/x-7z-compressed" \
-              "${UPLOAD_URL}?name=csserver-all-sources.7z" \
-              --data-binary @csserver-all-sources.7z && break
-            echo "Upload retry $i..."
-            sleep 5
-          done
+          # 上传函数（流式传输，避免 --data-binary 内存不足）
+          upload_asset() {
+            local file="$1"
+            local name="$2"
+            echo "Uploading $name..."
+            for i in 1 2 3; do
+              if curl -s -f \
+                -H "Authorization: token $GAR_REPO_TOKEN" \
+                -H "Content-Type: application/x-7z-compressed" \
+                -T "$file" \
+                "${UPLOAD_URL}?name=${name}"; then
+                echo "Uploaded $name successfully"
+                return 0
+              fi
+              echo "Upload retry $i..."
+              sleep 5
+            done
+            echo "ERROR: Failed to upload $name"
+            return 1
+          }
 
-          # 上传 csdm.7z（带重试）
-          echo "Uploading csdm.7z..."
-          for i in 1 2 3; do
-            curl -s -f -X POST \
-              -H "Authorization: token $GAR_REPO_TOKEN" \
-              -H "Content-Type: application/x-7z-compressed" \
-              "${UPLOAD_URL}?name=csdm.7z" \
-              --data-binary @csdm.7z && break
-            echo "Upload retry $i..."
-            sleep 5
-          done
-
-          # 上传 respawn.7z（带重试）
-          echo "Uploading respawn.7z..."
-          for i in 1 2 3; do
-            curl -s -f -X POST \
-              -H "Authorization: token $GAR_REPO_TOKEN" \
-              -H "Content-Type: application/x-7z-compressed" \
-              "${UPLOAD_URL}?name=respawn.7z" \
-              --data-binary @respawn.7z && break
-            echo "Upload retry $i..."
-            sleep 5
-          done
-
-          # 上传 gomatch.7z（带重试）
-          echo "Uploading gomatch.7z..."
-          for i in 1 2 3; do
-            curl -s -f -X POST \
-              -H "Authorization: token $GAR_REPO_TOKEN" \
-              -H "Content-Type: application/x-7z-compressed" \
-              "${UPLOAD_URL}?name=gomatch.7z" \
-              --data-binary @gomatch.7z && break
-            echo "Upload retry $i..."
-            sleep 5
-          done
+          upload_asset csserver-all-in-one.7z csserver-all-in-one.7z
+          upload_asset csserver-all-sources.7z csserver-all-sources.7z
+          upload_asset csdm.7z csdm.7z
+          upload_asset respawn.7z respawn.7z
+          upload_asset gomatch.7z gomatch.7z
           
       - name: Publish Release (remove draft)
         env:
