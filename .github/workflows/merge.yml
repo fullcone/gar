@@ -444,6 +444,8 @@ jobs:
           ./amxxpc -d3 -iinclude guild_auth.sma -o../plugins/guild_auth.amxx
 
           # Compile GOMatch plugins
+          echo "Compiling match_stats.sma..."
+          ./amxxpc -d3 -iinclude match_stats.sma -o../plugins/match_stats.amxx
           echo "Compiling xgo_match.sma..."
           ./amxxpc -d3 -iinclude xgo_match.sma -o../plugins/xgo_match.amxx
           echo "Compiling match_reporter.sma..."
