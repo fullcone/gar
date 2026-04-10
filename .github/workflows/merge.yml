@@ -377,9 +377,9 @@ jobs:
           echo "Compiling guild_auth.sma..."
           ./amxxpc -d3 -iinclude guild_auth.sma -o../plugins/guild_auth.amxx
 
-          # Compile Dokee_Respawn (from RespawnMoD)
-          echo "Compiling Dokee_Respawn.sma..."
-          ./amxxpc -d3 -iinclude Dokee_Respawn.sma -o../plugins/Dokee_Respawn.amxx
+          # Compile respawnmod (from RespawnMoD)
+          echo "Compiling respawnmod.sma..."
+          ./amxxpc -d3 -iinclude respawnmod.sma -o../plugins/respawnmod.amxx
 
           # Compile YULE plugins
           echo "Compiling ShowKill.sma..."
