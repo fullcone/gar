@@ -458,6 +458,8 @@ jobs:
           ./amxxpc -d3 -iinclude freeze_auto.sma -o../plugins/freeze_auto.amxx
           echo "Compiling score_balance.sma..."
           ./amxxpc -d3 -iinclude score_balance.sma -o../plugins/score_balance.amxx
+          echo "Compiling xgo_damage.sma..."
+          ./amxxpc -d3 -iinclude xgo_damage.sma -o../plugins/xgo_damage.amxx
 
           cd $GITHUB_WORKSPACE
 
