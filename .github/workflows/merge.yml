@@ -460,6 +460,8 @@ jobs:
           ./amxxpc -d3 -iinclude score_balance.sma -o../plugins/score_balance.amxx
           echo "Compiling xgo_damage.sma..."
           ./amxxpc -d3 -iinclude xgo_damage.sma -o../plugins/xgo_damage.amxx
+          echo "Compiling recoil_manager.sma..."
+          ./amxxpc -d3 -iinclude recoil_manager.sma -o../plugins/recoil_manager.amxx
 
           cd $GITHUB_WORKSPACE
 
