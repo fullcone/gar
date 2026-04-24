@@ -443,25 +443,9 @@ jobs:
           echo "Compiling guild_auth.sma..."
           ./amxxpc -d3 -iinclude guild_auth.sma -o../plugins/guild_auth.amxx
 
-          # Compile GOMatch plugins
-          echo "Compiling match_stats.sma..."
-          ./amxxpc -d3 -iinclude match_stats.sma -o../plugins/match_stats.amxx
+          # Compile merged GOMatch plugin
           echo "Compiling xgo_match.sma..."
           ./amxxpc -d3 -iinclude xgo_match.sma -o../plugins/xgo_match.amxx
-          echo "Compiling match_reporter.sma..."
-          ./amxxpc -d3 -iinclude match_reporter.sma -o../plugins/match_reporter.amxx
-          echo "Compiling match_mvp.sma..."
-          ./amxxpc -d3 -iinclude match_mvp.sma -o../plugins/match_mvp.amxx
-          echo "Compiling player_hud.sma..."
-          ./amxxpc -d3 -iinclude player_hud.sma -o../plugins/player_hud.amxx
-          echo "Compiling freeze_auto.sma..."
-          ./amxxpc -d3 -iinclude freeze_auto.sma -o../plugins/freeze_auto.amxx
-          echo "Compiling score_balance.sma..."
-          ./amxxpc -d3 -iinclude score_balance.sma -o../plugins/score_balance.amxx
-          echo "Compiling xgo_damage.sma..."
-          ./amxxpc -d3 -iinclude xgo_damage.sma -o../plugins/xgo_damage.amxx
-          echo "Compiling recoil_manager.sma..."
-          ./amxxpc -d3 -iinclude recoil_manager.sma -o../plugins/recoil_manager.amxx
 
           cd $GITHUB_WORKSPACE
 
